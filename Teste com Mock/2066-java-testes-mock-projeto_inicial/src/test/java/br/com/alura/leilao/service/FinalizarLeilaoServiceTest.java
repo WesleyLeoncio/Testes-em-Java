@@ -6,9 +6,10 @@ import br.com.alura.leilao.model.Leilao;
 import br.com.alura.leilao.model.Usuario;
 import static org.junit.Assert.*;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.mockito.Mockito;
+import static org.mockito.Mockito.*;
 import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
@@ -22,17 +23,21 @@ public class FinalizarLeilaoServiceTest {
     @Mock
     private LeilaoDao leilaoDao;
 
+    @Mock
+    private EnviadorDeEmails enviadorDeEmails;
+
     @BeforeEach
     public void beforeEach(){
         MockitoAnnotations.initMocks((this));
-        this.service = new FinalizarLeilaoService(leilaoDao);
+        this.service = new FinalizarLeilaoService(leilaoDao, enviadorDeEmails);
     }
 
     @Test
+    @DisplayName("Deveria finalizar um leilao")
     void deveriaFinalizarUmLeilao(){
         List<Leilao> leiloes = leiloes();
 
-        Mockito.when(leilaoDao.buscarLeiloesExpirados()).thenReturn(leiloes);
+        when(leilaoDao.buscarLeiloesExpirados()).thenReturn(leiloes);
 
         service.finalizarLeiloesExpirados();
 
@@ -40,8 +45,40 @@ public class FinalizarLeilaoServiceTest {
         assertTrue(leilao.isFechado());
         assertEquals(new BigDecimal("900"), leilao.getLanceVencedor().getValor());
 
-        Mockito.verify(leilaoDao).salvar(leilao);
+        verify(leilaoDao).salvar(leilao);
     }
+
+    @Test
+    @DisplayName("Deveria enviar um email para o vencedor do leilao")
+    void deveriaEnviarEmail(){
+        List<Leilao> leiloes = leiloes();
+
+        when(leilaoDao.buscarLeiloesExpirados()).thenReturn(leiloes);
+
+        service.finalizarLeiloesExpirados();
+
+        Leilao leilao = leiloes.get(0);
+        Lance lanceVencedor = leilao.getLanceVencedor();
+
+        verify(enviadorDeEmails).enviarEmailVencedorLeilao(lanceVencedor);
+    }
+
+    @Test
+    @DisplayName("Não deveria enviar um email caso aconteça um erro")
+    void naodeveriaEnviarEmailEmCasoDeErro(){
+        List<Leilao> leiloes = leiloes();
+
+        when(leilaoDao.buscarLeiloesExpirados()).thenReturn(leiloes);
+
+        when(leilaoDao.salvar(any())).thenThrow(RuntimeException.class);
+
+        try{
+            service.finalizarLeiloesExpirados();
+            verifyNoInteractions(enviadorDeEmails);
+        }catch (Exception e){}
+
+    }
+
 
     // Lista fake
     private List<Leilao> leiloes(){
